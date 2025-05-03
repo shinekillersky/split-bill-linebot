@@ -8,6 +8,7 @@ import gspread
 from google.oauth2 import service_account
 from datetime import datetime
 import json
+import base64
 
 load_dotenv()
 
@@ -17,25 +18,21 @@ app = FastAPI()
 line_bot_api = LineBotApi(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
 handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
 
-# GOOGLE_CREDENTIALS 驗證與初始化
-if "GOOGLE_CREDENTIALS" not in os.environ:
-    raise EnvironmentError("❌ GOOGLE_CREDENTIALS 環境變數不存在")
+# 從 base64 解析 JSON 資料
+credentials_b64 = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+if not credentials_b64:
+    raise Exception("❌ 未找到 GOOGLE_CREDENTIALS_BASE64")
 
-try:
-    credentials_info = json.loads(os.environ["GOOGLE_CREDENTIALS"])
-    if "private_key" not in credentials_info:
-        raise ValueError("❌ private_key 不存在，或格式錯誤")
-except Exception as e:
-    raise RuntimeError(f"❌ GOOGLE_CREDENTIALS 格式錯誤: {str(e)}")
+credentials_info = json.loads(
+    base64.b64decode(credentials_b64).decode("utf-8")
+)
 
-# Google Sheets 認證與初始化
+# 初始化認證
 credentials = service_account.Credentials.from_service_account_info(
     credentials_info,
-    scopes=[
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
+    scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 )
+
 client = gspread.authorize(credentials)
 sheet = client.open_by_key(os.getenv("SPREADSHEET_ID")).sheet1
 
