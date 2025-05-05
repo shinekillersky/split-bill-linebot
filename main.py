@@ -8,13 +8,25 @@ import gspread
 from datetime import datetime
 import pytz
 import os
+import base64
+
 
 app = FastAPI()
 line_bot_api = LineBotApi(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
 handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
 def get_gspread_client_from_env():
-    credentials_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS_BASE64"))
-    scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
+    encoded = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+
+    if not encoded:
+        raise Exception("❌ 未讀取到 GOOGLE_CREDENTIALS_BASE64（變數為 None），請檢查 Railway 環境變數是否有空格或引號錯誤")
+
+    try:
+        decoded = base64.b64decode(encoded)
+        credentials_dict = json.loads(decoded)
+    except Exception as e:
+        raise Exception(f"❌ base64 解碼或 JSON 解析失敗：{e}")
+
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
     return gspread.authorize(creds)
 
