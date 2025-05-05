@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage
+    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage, QuickReply, QuickReplyButton, MessageAction
 )
 from linebot.exceptions import InvalidSignatureError
 import json
@@ -15,6 +15,7 @@ import base64
 app = FastAPI()
 line_bot_api = LineBotApi(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
 handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
+user_state = {}
 
 def get_gspread_client_from_env():
     encoded = os.getenv("GOOGLE_CREDENTIALS_BASE64")
@@ -30,7 +31,7 @@ sheet = gc.open("記帳表單").sheet1
 def get_all_records():
     return sheet.get_all_records()
 
-def to_dash_date(s):  # 20240505 → 2024-05-05
+def to_dash_date(s):
     if len(s) == 8 and s.isdigit():
         return f"{s[:4]}-{s[4:6]}-{s[6:]}"
     return s
@@ -38,10 +39,17 @@ def to_dash_date(s):  # 20240505 → 2024-05-05
 def filter_by_date(records, date_str):
     return [r for r in records if r["日期"] == date_str]
 
+def record_expense(category, item, amount, note):
+    now = datetime.now(pytz.timezone("Asia/Taipei"))
+    date = now.strftime("%Y-%m-%d")
+    row = [date, category, item, amount, note]
+    sheet.append_row(row)
+    return date
+
 def create_flex_list(records):
     bubbles = []
     for idx, r in enumerate(records[:10]):
-        row = idx + 2  # offset for sheet
+        row = idx + 2
         b = {
             "type": "bubble",
             "body": {
@@ -65,48 +73,13 @@ def create_flex_list(records):
                         "type": "button",
                         "style": "primary",
                         "color": "#FF4444",
-                        "action": {
-                            "type": "message",
-                            "label": "🗑 刪除",
-                            "text": f"刪除 {row}"
-                        }
+                        "action": {"type": "message", "label": "🗑 刪除", "text": f"刪除 {row}"}
                     },
-                    {
+                    *[{
                         "type": "button",
                         "style": "secondary",
-                        "action": {
-                            "type": "message",
-                            "label": "✏️ 修改類別",
-                            "text": f"修改 {row} 類別 "
-                        }
-                    },
-                    {
-                        "type": "button",
-                        "style": "secondary",
-                        "action": {
-                            "type": "message",
-                            "label": "✏️ 修改項目",
-                            "text": f"修改 {row} 項目 "
-                        }
-                    },
-                    {
-                        "type": "button",
-                        "style": "secondary",
-                        "action": {
-                            "type": "message",
-                            "label": "✏️ 修改金額",
-                            "text": f"修改 {row} 金額 "
-                        }
-                    },
-                    {
-                        "type": "button",
-                        "style": "secondary",
-                        "action": {
-                            "type": "message",
-                            "label": "✏️ 修改備註",
-                            "text": f"修改 {row} 備註 "
-                        }
-                    }
+                        "action": {"type": "message", "label": f"✏️ 修改{field}", "text": f"修改 {row} {field} "}
+                    } for field in ["類別", "項目", "金額", "備註"]]
                 ]
             }
         }
@@ -126,9 +99,44 @@ async def callback(request: Request):
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     text = event.message.text.strip()
-    records = get_all_records()
+    user_id = event.source.user_id
     now = datetime.now(pytz.timezone("Asia/Taipei"))
+    records = get_all_records()
 
+    # ➕ 引導式新增
+    if text == "記帳 ":
+        user_state[user_id] = {"step": "wait_category"}
+        reply = TextSendMessage(
+            text="請選擇類別（食 / 衣 / 住 / 行 / 育 / 樂）",
+            quick_reply=QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label=cat, text=cat)) for cat in ["食", "衣", "住", "行", "育", "樂"]
+            ])
+        )
+        line_bot_api.reply_message(event.reply_token, reply)
+        return
+
+    if user_id in user_state and user_state[user_id].get("step") == "wait_category":
+        user_state[user_id]["category"] = text
+        user_state[user_id]["step"] = "wait_detail"
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請輸入：項目 金額 備註
+例如：早餐 50 早餐店"))
+        return
+
+    if user_id in user_state and user_state[user_id].get("step") == "wait_detail":
+        try:
+            item, amount_str, note = text.split(maxsplit=2)
+            amount = int(amount_str)
+            category = user_state[user_id]["category"]
+            date = record_expense(category, item, amount, note)
+            msg = f"✅ 記帳成功
+📅{date} 📂{category} 📝{item} 💰{amount} 🗒️{note}"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
+        except Exception as e:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 記帳失敗：{e}"))
+        user_state.pop(user_id)
+        return
+
+    # 查詢功能
     if text.startswith("查詢"):
         try:
             target = text.split()[1] if len(text.split()) > 1 else now.strftime("%Y-%m-%d")
@@ -142,15 +150,17 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
         return
 
+    # 刪除
     if text.startswith("刪除"):
         try:
             row = int(text.split()[1])
             sheet.delete_rows(row)
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ 已刪除第 {row} 列"))
         except:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ 格式錯誤，請使用：刪除 3"))
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ 請輸入格式：刪除 3"))
         return
 
+    # 修改
     if text.startswith("修改"):
         try:
             _, row_str, field, *val_parts = text.split()
@@ -167,4 +177,21 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 修改失敗：{e}"))
         return
 
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請使用：查詢、刪除、修改 指令"))
+    # 預設選單
+    menu = {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "md",
+            "contents": [
+                {"type": "text", "text": "📌 請選擇操作功能", "weight": "bold", "size": "lg", "align": "center"},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "➕ 新增記帳", "text": "記帳 "}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "📋 查詢紀錄", "text": "查詢"}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "📊 統計分析", "text": "統計"}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "🗑️ 刪除紀錄", "text": "刪除 2"}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "✏️ 修改紀錄", "text": "修改 2 金額 999"}}
+            ]
+        }
+    }
+    line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇操作功能", contents=menu))
