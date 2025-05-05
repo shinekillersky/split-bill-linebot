@@ -2,6 +2,8 @@ from fastapi import FastAPI, Request
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import MessageEvent, TextMessage, TextSendMessage, FlexSendMessage
 from linebot.exceptions import InvalidSignatureError
+import json
+from oauth2client.service_account import ServiceAccountCredentials
 import gspread
 from datetime import datetime
 import pytz
@@ -10,7 +12,13 @@ import os
 app = FastAPI()
 line_bot_api = LineBotApi(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
 handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
-gc = gspread.service_account(filename="gspread-service-account.json")
+def get_gspread_client_from_env():
+    credentials_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS_BASE64"))
+    scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
+    return gspread.authorize(creds)
+
+gc = get_gspread_client_from_env()
 sheet = gc.open("記帳表單").sheet1
 
 def validate_category(category: str) -> str:
