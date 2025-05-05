@@ -118,8 +118,7 @@ def handle_message(event):
     if user_id in user_state and user_state[user_id].get("step") == "wait_category":
         user_state[user_id]["category"] = text
         user_state[user_id]["step"] = "wait_detail"
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請輸入：項目 金額 備註
-例如：早餐 50 早餐店"))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請輸入：項目 金額 備註 例如：早餐 50 早餐店"))
         return
 
     if user_id in user_state and user_state[user_id].get("step") == "wait_detail":
@@ -128,8 +127,7 @@ def handle_message(event):
             amount = int(amount_str)
             category = user_state[user_id]["category"]
             date = record_expense(category, item, amount, note)
-            msg = f"✅ 記帳成功
-📅{date} 📂{category} 📝{item} 💰{amount} 🗒️{note}"
+            msg = f"✅ 記帳成功 📅{date} 📂{category} 📝{item} 💰{amount} 🗒️{note}"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
         except Exception as e:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 記帳失敗：{e}"))
