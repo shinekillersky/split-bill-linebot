@@ -127,41 +127,41 @@ def handle_message(event):
             )
         return
 
-        # 使用者輸入「查詢」 → 顯示 quick reply 日期選擇
-        if text == "查詢":
-            today = now.strftime("%Y%m%d")
-            yesterday = (now - timedelta(days=1)).strftime("%Y%m%d")
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text="請選擇要查詢的日期：",
-                quick_reply=QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="今天", text=f"查詢 {today}")),
-                    QuickReplyButton(action=MessageAction(label="昨天", text=f"查詢 {yesterday}")),
-                    QuickReplyButton(action=MessageAction(label="自訂日期", text="查詢 自訂"))
-                ])
-            ))
-            return
+    # 使用者輸入「查詢」 → 顯示 quick reply 日期選擇
+    if text == "查詢":
+        today = now.strftime("%Y%m%d")
+        yesterday = (now - timedelta(days=1)).strftime("%Y%m%d")
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(
+            text="請選擇要查詢的日期：",
+            quick_reply=QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="今天", text=f"查詢 {today}")),
+                QuickReplyButton(action=MessageAction(label="昨天", text=f"查詢 {yesterday}")),
+                QuickReplyButton(action=MessageAction(label="自訂日期", text="查詢 自訂"))
+            ])
+        ))
+        return
 
-        # 如果是查詢 自訂 → 要求輸入日期
-        if text.strip() == "查詢 自訂":
-            user_state[user_id] = {"step": "wait_custom_query_date"}
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text="請輸入要查詢的日期（格式：20240510）"
-            ))
-            return
+    # 如果是查詢 自訂 → 要求輸入日期
+    if text.strip() == "查詢 自訂":
+        user_state[user_id] = {"step": "wait_custom_query_date"}
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(
+            text="請輸入要查詢的日期（格式：20240510）"
+        ))
+        return
 
-        # 處理自訂日期的輸入
-        if user_id in user_state and user_state[user_id].get("step") == "wait_custom_query_date":
-            try:
-                date_str = to_dash_date(text.strip())
-                matched = filter_by_date(records, date_str)
-                if not matched:
-                    raise ValueError(f"{date_str} 沒有紀錄")
-                flex = create_flex_list(matched)
-                line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查詢結果", contents=flex))
-            except Exception as e:
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
-            user_state.pop(user_id)
-            return    
+    # 處理自訂日期的輸入
+    if user_id in user_state and user_state[user_id].get("step") == "wait_custom_query_date":
+        try:
+            date_str = to_dash_date(text.strip())
+            matched = filter_by_date(records, date_str)
+            if not matched:
+                raise ValueError(f"{date_str} 沒有紀錄")
+            flex = create_flex_list(matched)
+            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查詢結果", contents=flex))
+        except Exception as e:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
+        user_state.pop(user_id)
+        return    
 
     # 使用者輸入「修改」→ 進入引導模式
     if text == "修改":
