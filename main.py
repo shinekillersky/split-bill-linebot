@@ -188,3 +188,8 @@ def handle_message(event):
         }
     }
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇操作功能", contents=menu))
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
