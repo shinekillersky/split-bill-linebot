@@ -46,18 +46,19 @@ def record_expense(item, amount, note):
     sheet.append_row(row)
     return date
 
-def create_flex_list(records):
+# ✅ 讓 create_flex_list 支援指定 row 編號
+def create_flex_list(records, start_row=2):
     bubbles = []
-    for idx, r in enumerate(records[:10]):
-        row = idx + 2
+    for idx, r in enumerate(records):
+        row = start_row + idx
         b = {
             "type": "bubble",
             "body": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
-                    {"type": "text", "text": f"📝 第 {idx + 1} 筆資料"},
-                    {"type": "text", "text": f"📅 {r['日期']}"},                    
+                    {"type": "text", "text": f"📝 第 {row - 1} 筆資料"},
+                    {"type": "text", "text": f"📅 {r['日期']}"},
                     {"type": "text", "text": f"📝 {r['項目']}"},
                     {"type": "text", "text": f"💰 {r['金額']}"},
                     {"type": "text", "text": f"🗒️ {r['備註']}"}
@@ -67,6 +68,8 @@ def create_flex_list(records):
         bubbles.append(b)
     return {"type": "carousel", "contents": bubbles}
 
+    # ✅ 呼叫時帶入真實 row
+    flex = create_flex_list([record], start_row=real_row_number)
 
 @app.post("/callback")
 async def callback(request: Request):
@@ -102,6 +105,8 @@ def handle_message(event):
             # 🔽 新增一筆後，馬上查出最後一筆資料
             all_rows = sheet.get_all_values()
             last_row = all_rows[-1]
+            real_row_number = len(all_rows) # ✅ 真實的行數
+
             record = {
                 "日期": last_row[0],
                 "項目": last_row[1],
