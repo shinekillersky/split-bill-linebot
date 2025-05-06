@@ -46,6 +46,25 @@ def record_expense(item, amount, note):
     sheet.append_row(row)
     return date
 
+# 主選單
+def get_main_menu():
+    return {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "md",
+            "contents": [
+                {"type": "text", "text": "📌 請選擇操作功能", "weight": "bold", "size": "lg", "align": "center"},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "➕ 新增", "text": "新增"}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "📋 查詢", "text": "查詢"}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "✏️ 修改", "text": "修改"}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "🗑️ 刪除", "text": "刪除"}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "📊 統計", "text": "統計"}}
+            ]
+        }            
+    }
+
 # ✅ 讓 create_flex_list 支援指定 row 編號
 def create_flex_list(records, start_row=2):
     bubbles = []
@@ -145,7 +164,7 @@ def handle_message(event):
     if text.strip() == "查詢 自訂":
         user_state[user_id] = {"step": "wait_custom_query_date"}
         line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text="請輸入要查詢的日期（格式：20240510）"
+            text="請輸入要查詢的日期（格式：20250510）"
         ))
         return
 
@@ -156,7 +175,8 @@ def handle_message(event):
             matched = filter_by_date(records, date_str)
             if not matched:
                 raise ValueError(f"{date_str} 沒有紀錄")
-            flex = create_flex_list(matched)
+            start_row = 2 + records.index(matched[0])  # 從第幾列開始
+            flex = create_flex_list(matched, start_row=start_row)
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查詢結果", contents=flex))
         except Exception as e:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
@@ -249,22 +269,7 @@ def handle_message(event):
             # 🔁 回覆刪除成功並跳出主選單
             line_bot_api.reply_message(event.reply_token, [
                 TextSendMessage(text=f"✅ 已成功刪除第 {row} 筆資料"),
-                FlexSendMessage(alt_text="選單", contents={
-                    "type": "bubble",
-                    "body": {
-                        "type": "box",
-                        "layout": "vertical",
-                        "spacing": "md",
-                        "contents": [
-                            {"type": "text", "text": "📌 請選擇操作功能", "weight": "bold", "size": "lg", "align": "center"},
-                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "➕ 新增", "text": "新增"}},
-                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "📋 查詢", "text": "查詢"}},
-                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "✏️ 修改", "text": "修改"}},
-                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "🗑️ 刪除", "text": "刪除"}},
-                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "📊 統計", "text": "統計"}}
-                        ]
-                    }
-                })
+                FlexSendMessage(alt_text="選單", contents=get_main_menu())
             ])
         except:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ 請輸入有效數字，例如：2"))
@@ -337,22 +342,9 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
         return
 
-    menu = {
-        "type": "bubble",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "spacing": "md",
-            "contents": [
-                {"type": "text", "text": "📌 請選擇操作功能", "weight": "bold", "size": "lg", "align": "center"},
-                {"type": "button", "style": "primary", "action": {"type": "message", "label": "➕ 新增", "text": "新增"}},
-                {"type": "button", "style": "primary", "action": {"type": "message", "label": "📋 查詢", "text": "查詢"}},
-                {"type": "button", "style": "primary", "action": {"type": "message", "label": "✏️ 修改", "text": "修改"}},
-                {"type": "button", "style": "primary", "action": {"type": "message", "label": "🗑️ 刪除", "text": "刪除"}},
-                {"type": "button", "style": "primary", "action": {"type": "message", "label": "📊 統計", "text": "統計"}}
-            ]
-        }            
-    }    
+    line_bot_api.reply_message(event.reply_token, FlexSendMessage(
+        alt_text="請選擇操作功能", contents=get_main_menu()
+    ))
 
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇操作功能", contents=menu))
 
