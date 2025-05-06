@@ -39,7 +39,7 @@ def to_dash_date(s):
 def filter_by_date(records, date_str):
     return [r for r in records if r["日期"] == date_str]
 
-def record_expense(category, item, amount, note):
+def record_expense(item, amount, note):
     now = datetime.now(pytz.timezone("Asia/Taipei"))
     date = now.strftime("%Y-%m-%d")
     row = [date, item, amount, note]
@@ -96,7 +96,7 @@ def handle_message(event):
         try:
             item, amount_str, note = text.split(maxsplit=2)
             amount = int(amount_str)
-            date = record_expense(item, amount, note)  # 👈 移除 category
+            date = record_expense(item, amount, note)
             msg = f"✅ 記帳成功 📅{date} 📝{item} 💰{amount} 🗒️{note}"
 
             # 🔽 新增一筆後，馬上查出最後一筆資料
