@@ -85,7 +85,7 @@ def handle_message(event):
     now = datetime.now(pytz.timezone("Asia/Taipei"))
     records = get_all_records()
 
-    if text in ["記帳", "新增"]:
+    if text == "新增":
         user_state[user_id] = {"step": "wait_detail"}
         line_bot_api.reply_message(event.reply_token, TextSendMessage(
             text="請輸入：項目 金額 備註，例如：\n早餐 80 QBurger"
@@ -252,11 +252,11 @@ def handle_message(event):
                         "spacing": "md",
                         "contents": [
                             {"type": "text", "text": "📌 請選擇操作功能", "weight": "bold", "size": "lg", "align": "center"},
-                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "➕ 新增記帳", "text": "新增"}},
-                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "📋 查詢紀錄", "text": "查詢"}},
-                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "✏️ 修改紀錄", "text": "修改"}},
-                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "🗑️ 刪除紀錄", "text": "刪除"}},
-                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "📊 統計分析", "text": "統計"}}
+                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "➕ 新增", "text": "新增"}},
+                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "📋 查詢", "text": "查詢"}},
+                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "✏️ 修改", "text": "修改"}},
+                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "🗑️ 刪除", "text": "刪除"}},
+                            {"type": "button", "style": "primary", "action": {"type": "message", "label": "📊 統計", "text": "統計"}}
                         ]
                     }
                 })
@@ -339,100 +339,17 @@ def handle_message(event):
             "layout": "vertical",
             "spacing": "md",
             "contents": [
-            {
-                "type": "text",
-                "text": "📌 請選擇操作功能",
-                "weight": "bold",
-                "size": "lg",
-                "align": "center"
-            },
-            {
-                "type": "button",
-                "style": "primary",
-                "action": {
-                    "type": "message",
-                    "label": "📋 查詢",
-                    "text": "查詢"
-                }
-            },
-            {
-                "type": "button",
-                "style": "primary",
-                "action": {
-                    "type": "message",
-                    "label": "➕ 新增記帳",
-                    "text": "新增記帳"
-                }
-            },
-            {
-                "type": "button",
-                "style": "primary",
-                "action": {
-                    "type": "message",
-                    "label": "✏️ 修改紀錄",
-                    "text": "修改 2 備註"
-                }
-            },
-            {
-                "type": "button",
-                "style": "primary",
-                "action": {
-                    "type": "message",
-                    "label": "🗑 刪除紀錄",
-                    "text": "刪除"
-                }
-            },
-            {
-                "type": "button",
-                "style": "primary",
-                "action": {
-                    "type": "message",
-                    "label": "📊 統計",
-                    "text": "統計"
-                }
-            }
+                {"type": "text", "text": "📌 請選擇操作功能", "weight": "bold", "size": "lg", "align": "center"},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "➕ 新增", "text": "新增"}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "📋 查詢", "text": "查詢"}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "✏️ 修改", "text": "修改"}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "🗑️ 刪除", "text": "刪除"}},
+                {"type": "button", "style": "primary", "action": {"type": "message", "label": "📊 統計", "text": "統計"}}
             ]
-        }
-    }
+        }            
+    }    
 
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇操作功能", contents=menu))
-
-    # 引導式修改第二階段
-    if user_id in user_state and user_state[user_id].get("mode") == "modify" and user_state[user_id].get("step") == "wait_modify_value":
-        try:
-            row = user_state[user_id]["row"]
-            field = user_state[user_id]["field"]
-            value = text
-            col_map = {"日期": 1, "類別": 2, "項目": 3, "金額": 4, "備註": 5}
-            col = col_map[field]
-            sheet.update_cell(row, col, value)
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text=f"✅ 第 {row} 列已更新 {field} → {value}"
-            ))
-        except Exception as e:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 修改失敗：{e}"))
-        user_state.pop(user_id)
-        return
-
-    # 修改第一階段（收到修改 row 欄位）
-    if text.startswith("修改"):
-        try:
-            _, row_str, field = text.split(maxsplit=2)
-            row = int(row_str)
-            if field not in ["日期", "類別", "項目", "金額", "備註"]:
-                raise ValueError("欄位名稱錯誤")
-            user_state[user_id] = {
-                "mode": "modify",
-                "step": "wait_modify_value",
-                "row": row,
-                "field": field
-            }
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text=f"請輸入新的「{field}」內容（第 {row} 列）：" ))
-        except Exception as e:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 修改引導失敗：{e}"))
-        return
-
 
 @app.get("/health")
 async def health_check():
