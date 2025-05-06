@@ -151,7 +151,7 @@ def handle_message(event):
         today = now.strftime("%Y%m%d")
         yesterday = (now - timedelta(days=1)).strftime("%Y%m%d")
         line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text="請選擇要查詢的日期：",
+            text="請選擇要查詢的日期",
             quick_reply=QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="今天", text=f"查詢 {today}")),
                 QuickReplyButton(action=MessageAction(label="昨天", text=f"查詢 {yesterday}")),
@@ -160,29 +160,43 @@ def handle_message(event):
         ))
         return
 
-    # 如果是查詢 自訂 → 要求輸入日期
-    if text.strip() == "查詢 自訂":
-        user_state[user_id] = {"step": "wait_custom_query_date"}
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text="請輸入要查詢的日期（格式：20250510）"
-        ))
-        return
+    # ✅ 查詢 [日期] 的格式處理（如：查詢 20250510）
+    if text.startswith("查詢 "):
+        try:
+            target = text.split()[1]
+            if target == "自訂":
+                user_state[user_id] = {"step": "wait_custom_query_date"}
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                    text="請輸入要查詢的日期（格式：20250510）"
+                ))
+                return
 
-    # 處理自訂日期的輸入
+            date_str = to_dash_date(target)
+            matched = filter_by_date(records, date_str)
+            if not matched:
+                raise ValueError(f"{date_str} 沒有紀錄")
+            start_row = 2 + records.index(matched[0])  # 從哪一列開始
+            flex = create_flex_list(matched, start_row=start_row)
+            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查詢結果", contents=flex))
+        except Exception as e:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
+        return
+    
+    # ✅ 處理自訂日期的輸入
     if user_id in user_state and user_state[user_id].get("step") == "wait_custom_query_date":
         try:
             date_str = to_dash_date(text.strip())
             matched = filter_by_date(records, date_str)
             if not matched:
                 raise ValueError(f"{date_str} 沒有紀錄")
-            start_row = 2 + records.index(matched[0])  # 從第幾列開始
+            start_row = 2 + records.index(matched[0])
             flex = create_flex_list(matched, start_row=start_row)
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查詢結果", contents=flex))
         except Exception as e:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
         user_state.pop(user_id)
-        return    
-
+        return
+    
     # 使用者輸入「修改」→ 進入引導模式
     if text == "修改":
         user_state[user_id] = {"step": "wait_modify_row"}
@@ -280,7 +294,7 @@ def handle_message(event):
         today = now.strftime("%Y%m%d")
         yesterday = (now - timedelta(days=1)).strftime("%Y%m%d")
         line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text="請選擇要統計的日期：",
+            text="請選擇要統計的日期",
             quick_reply=QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="今天", text=f"統計 {today}")),
                 QuickReplyButton(action=MessageAction(label="昨天", text=f"統計 {yesterday}")),
@@ -342,11 +356,7 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
         return
 
-    line_bot_api.reply_message(event.reply_token, FlexSendMessage(
-        alt_text="請選擇操作功能", contents=get_main_menu()
-    ))
-
-    line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇操作功能", contents=menu))
+    line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇操作功能", contents=get_main_menu()))
 
 @app.get("/health")
 async def health_check():
