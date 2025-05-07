@@ -262,10 +262,11 @@ def handle_message(event):
     # 使用者輸入了項目 金額 [備註] → 執行修改
     if user_id in user_state and user_state[user_id].get("step") == "wait_modify_values":
         try:
-            row = user_state[user_id]["row"]
-            all_rows = sheet.get_all_values()
-            if row < 2 or row > len(all_rows):
-                raise ValueError(f"❌ 第 {row} 行不存在，請重新輸入有效行數。")
+            row = user_state[user_id]["row"]  # 使用者輸入的是「第幾筆資料」（不含標題列）
+            sheet_row = row + 1               # 所以實際在 Google Sheet 中是 row+1
+
+            if row < 1 or row > len(all_rows):
+                raise ValueError(f"❌ 第 {row} 筆不存在，請重新輸入")
 
             parts = text.split(maxsplit=2)
             if len(parts) < 2:
@@ -275,11 +276,11 @@ def handle_message(event):
             amount = int(parts[1])
             note = parts[2] if len(parts) == 3 else ""
 
-            sheet.update_cell(row, 2, item)
-            sheet.update_cell(row, 3, amount)
-            sheet.update_cell(row, 4, note)
+            sheet.update_cell(sheet_row, 2, item)
+            sheet.update_cell(sheet_row, 3, amount)
+            sheet.update_cell(sheet_row, 4, note)
 
-            row_data = sheet.row_values(row)
+            row_data = sheet.row_values(sheet_row)
             while len(row_data) < 4:
                 row_data.append("")
 
@@ -289,9 +290,7 @@ def handle_message(event):
                 "金額": row_data[2],
                 "備註": row_data[3]
             }
-
-            flex = create_flex_list([record], start_row=row)
-
+            flex = create_flex_list([record], start_row=row + 1)
             line_bot_api.reply_message(event.reply_token, [
                 TextSendMessage(text=f"✅ 第 {row} 筆資料已更新完成"),
                 FlexSendMessage(alt_text="更新後資料", contents=flex["contents"][0])
