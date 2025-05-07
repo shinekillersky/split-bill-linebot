@@ -224,10 +224,12 @@ def handle_message(event):
             date_str = to_dash_date(text.strip())
             matched = filter_by_date(records, date_str)
             if not matched:
-                raise ValueError(f"{date_str} 沒有紀錄")
+                raise ValueError(f"❌ {date_str} 查無資料，請重新輸入 8 碼日期（如 20250510）")
+            
             start_row = 2 + records.index(matched[0])
             flex = create_flex_list(matched, start_row=start_row)
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查詢結果", contents=flex))
+            user_state.pop(user_id)  # 成功查到才移除狀態
         except Exception as e:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
         user_state.pop(user_id)
@@ -328,17 +330,23 @@ def handle_message(event):
     if text == "統計":
         today = now.strftime("%Y%m%d")
         yesterday = (now - timedelta(days=1)).strftime("%Y%m%d")
+        this_month = now.strftime("%Y%m")
+        last_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y%m")
+
         line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text="請選擇要統計的日期",
+            text="請選擇要統計的範圍：",
             quick_reply=QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="今天", text=f"統計 {today}")),
                 QuickReplyButton(action=MessageAction(label="昨天", text=f"統計 {yesterday}")),
-                QuickReplyButton(action=MessageAction(label="自訂日期", text="統計 自訂"))
+                QuickReplyButton(action=MessageAction(label="本月", text=f"統計月 {this_month}")),
+                QuickReplyButton(action=MessageAction(label="上個月", text=f"統計月 {last_month}")),
+                QuickReplyButton(action=MessageAction(label="自訂日期", text="統計 自訂")),
+                QuickReplyButton(action=MessageAction(label="自訂年月", text="統計月 自訂"))
             ])
         ))
         return
 
-    # ✅ 統計：進入自訂日期狀態
+    # ✅ 統計：進入自訂 8 碼日期
     if text.strip() == "統計 自訂":
         user_state[user_id] = {"step": "wait_custom_stat_date"}
         line_bot_api.reply_message(event.reply_token, TextSendMessage(
@@ -346,30 +354,63 @@ def handle_message(event):
         ))
         return
 
-    # ✅ 統計：接收自訂日期後執行
+    # ✅ 統計：接收 8 碼日期後執行
     if user_id in user_state and user_state[user_id].get("step") == "wait_custom_stat_date":
         try:
             target_date = to_dash_date(text.strip())
             matched = filter_by_date(get_all_records(), target_date)
             if not matched:
-                raise ValueError(f"{target_date} 沒有資料")
-
+                raise ValueError(f"{target_date} 查無資料，請重新輸入 8 碼日期（如 20250510）")
+            
             total = sum(int(r["金額"]) for r in matched)
             per_item = {}
             for r in matched:
                 name = r["項目"]
                 per_item[name] = per_item.get(name, 0) + int(r["金額"])
-
             detail = "\n".join([f"{k}: {v}" for k, v in per_item.items()])
             msg = f"📊 統計日期：{target_date}\n總金額：{total} 元\n\n明細：\n{detail}"
 
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
+            user_state.pop(user_id)
         except Exception as e:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
-        user_state.pop(user_id)
+        return
+    
+    # ✅ 統計：進入自訂年月
+    if text == "統計月 自訂":
+        user_state[user_id] = {"step": "wait_custom_stat_month"}
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(
+            text="請輸入要統計的月份（格式：202505）"
+        ))
         return
 
-    # ✅ 統計：快速查詢今天 / 昨天
+    # ✅ 統計：接收 6 碼年月後執行
+    if user_id in user_state and user_state[user_id].get("step") == "wait_custom_stat_month":
+        try:
+            month_str = text.strip()
+            if len(month_str) != 6 or not month_str.isdigit():
+                raise ValueError("請輸入正確格式：202505")
+            year, month = month_str[:4], month_str[4:]
+            month_prefix = f"{year}-{month}"
+            matched = [r for r in get_all_records() if r["日期"].startswith(month_prefix)]
+            if not matched:
+                raise ValueError(f"{month_prefix} 查無資料，請重新輸入 6 碼年月（如 202505）")
+            
+            total = sum(int(r["金額"]) for r in matched)
+            per_item = {}
+            for r in matched:
+                name = r["項目"]
+                per_item[name] = per_item.get(name, 0) + int(r["金額"])
+            detail = "\n".join([f"{k}: {v}" for k, v in per_item.items()])
+            msg = f"📊 統計月份：{month_prefix}\n總金額：{total} 元\n\n明細：\n{detail}"
+
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
+            user_state.pop(user_id)
+        except Exception as e:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
+        return
+
+    # ✅ 統計：快速查詢（今天 / 昨天）
     if text.startswith("統計 "):
         try:
             date_str = to_dash_date(text.split()[1])
@@ -382,9 +423,33 @@ def handle_message(event):
             for r in matched:
                 name = r["項目"]
                 per_item[name] = per_item.get(name, 0) + int(r["金額"])
-
             detail = "\n".join([f"{k}: {v}" for k, v in per_item.items()])
             msg = f"📊 統計日期：{date_str}\n總金額：{total} 元\n\n明細：\n{detail}"
+
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
+        except Exception as e:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
+        return
+    
+    # ✅ 統計月：快速查詢（本月 / 上月）
+    if text.startswith("統計月 "):
+        try:
+            month_str = text.split()[1]
+            if len(month_str) != 6:
+                raise ValueError("格式錯誤，請輸入 6 碼年月")
+            year, month = month_str[:4], month_str[4:]
+            prefix = f"{year}-{month}"
+            matched = [r for r in get_all_records() if r["日期"].startswith(prefix)]
+            if not matched:
+                raise ValueError(f"{prefix} 沒有資料")
+            
+            total = sum(int(r["金額"]) for r in matched)
+            per_item = {}
+            for r in matched:
+                name = r["項目"]
+                per_item[name] = per_item.get(name, 0) + int(r["金額"])
+            detail = "\n".join([f"{k}: {v}" for k, v in per_item.items()])
+            msg = f"📊 統計月份：{prefix}\n總金額：{total} 元\n\n明細：\n{detail}"
 
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
         except Exception as e:
