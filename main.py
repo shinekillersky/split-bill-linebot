@@ -240,18 +240,18 @@ def handle_message(event):
     if text == "修改":
         user_state[user_id] = {"step": "wait_modify_row"}
         line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text="請輸入你要修改的第幾筆資料（例如：2）"
+            text="請輸入要修改第幾筆（例如：2）"
         ))
         return
 
-    # 使用者輸入了要修改的 row
+    # 等使用者輸入要修改哪一筆
     if user_id in user_state and user_state[user_id].get("step") == "wait_modify_row":
         try:
             row = int(text.strip())
             user_state[user_id]["row"] = row
-            user_state[user_id]["step"] = "wait_modify_field"
+            user_state[user_id]["step"] = "wait_modify_values"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text="請輸入你要修改的欄位（可選：項目、金額、備註）"
+                text="請輸入修改後的資料（格式：項目 金額 [備註]）例如：午餐 130 麥當勞"
             ))
         except:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(
@@ -259,31 +259,20 @@ def handle_message(event):
             ))
         return
 
-    # 使用者輸入了欄位名稱
-    if user_id in user_state and user_state[user_id].get("step") == "wait_modify_field":
-        field = text.strip()
-        col_map = {"項目": 3, "金額": 4, "備註": 5}
-        if field not in col_map:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text="❌ 欄位名稱錯誤，請輸入：項目、金額 或 備註"
-            ))
-            return
-        user_state[user_id]["field"] = field
-        user_state[user_id]["step"] = "wait_modify_value"
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text=f"請輸入新的「{field}」內容："
-        ))
-        return
-
-    # 使用者輸入了新值 → 執行修改 + 回傳結果
-    if user_id in user_state and user_state[user_id].get("step") == "wait_modify_value":
+    # 使用者輸入了項目 金額 [備註] → 執行修改
+    if user_id in user_state and user_state[user_id].get("step") == "wait_modify_values":
         try:
             row = user_state[user_id]["row"]
-            field = user_state[user_id]["field"]
-            value = text.strip()
-            col_map = {"項目": 3, "金額": 4, "備註": 5}
-            col = col_map[field]
-            sheet.update_cell(row, col, value)
+            parts = text.split(maxsplit=2)
+            if len(parts) < 2:
+                raise ValueError("請輸入至少兩個欄位：項目 金額（備註可選）")
+            item = parts[0]
+            amount = int(parts[1])
+            note = parts[2] if len(parts) == 3 else ""
+
+            sheet.update_cell(row, 2, item)   # 項目 → 第 2 欄
+            sheet.update_cell(row, 3, amount) # 金額 → 第 3 欄
+            sheet.update_cell(row, 4, note)   # 備註 → 第 4 欄
 
             # 查出更新後資料
             row_data = sheet.row_values(row)
@@ -292,15 +281,17 @@ def handle_message(event):
                 "項目": row_data[1],
                 "金額": row_data[2],
                 "備註": row_data[3]
-
             }
-            bubble = create_flex_list([record])
+            flex = create_flex_list([record], start_row=row)
+
             line_bot_api.reply_message(event.reply_token, [
-                TextSendMessage(text=f"✅ 第 {row} 筆資料的「{field}」已更新為：{value}"),
-                FlexSendMessage(alt_text="更新後資料", contents=bubble["contents"][0])
+                TextSendMessage(text=f"✅ 第 {row} 筆資料已更新完成"),
+                FlexSendMessage(alt_text="更新後資料", contents=flex["contents"][0])
             ])
         except Exception as e:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 修改失敗：{e}"))
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                text=f"❌ 修改失敗：{e}"
+            ))
         user_state.pop(user_id)
         return
 
@@ -395,7 +386,8 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
         return
 
-    line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇操作功能", contents=get_main_menu()))
+    if text == "選單":
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="請選擇操作功能", contents=get_main_menu()))
 
 @app.get("/health")
 async def health_check():
