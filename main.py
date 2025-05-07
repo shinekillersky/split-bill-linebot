@@ -76,7 +76,7 @@ def create_flex_list(records, start_row=2):
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
-                    {"type": "text", "text": f"📝 第 {row - 1} 筆資料"},
+                    {"type": "text", "text": f"📝 第 {row - 1} 筆"},
                     {"type": "text", "text": f"📅 {r['日期']}"},
                     {"type": "text", "text": f"📝 {r['項目']}"},
                     {"type": "text", "text": f"💰 {r['金額']}"},
@@ -107,80 +107,83 @@ def handle_message(event):
     now = datetime.now(pytz.timezone("Asia/Taipei"))
     records = get_all_records()
 
-    if text == "新增":
-        user_state[user_id] = {"step": "wait_detail"}
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text="請輸入：項目 金額 備註，例如：\n早餐 80 QBurger"
-        ))
-        return
+    # ✅ 新增功能：可直接記帳或引導輸入
+    if text.startswith("新增"):
+        parts = text.split(maxsplit=3)
+        
+        # ✅ 格式：新增 項目 金額 備註
+        if len(parts) == 4:
+            _, item, amount_str, note = parts
+            try:
+                amount = int(amount_str)
+                date = record_expense(item, amount, note)
+                msg = f"✅ 記帳成功"
 
-    if user_id in user_state and user_state[user_id].get("step") == "wait_detail":
-        try:
-            item, amount_str, note = text.split(maxsplit=2)
-            amount = int(amount_str)
-            date = record_expense(item, amount, note)
-            msg = f"✅ 記帳成功 📅{date} 📝{item} 💰{amount} 🗒️{note}"
+                all_rows = sheet.get_all_values()
+                last_row = all_rows[-1]
+                real_row_number = len(all_rows)
 
-            # 🔽 新增一筆後，馬上查出最後一筆資料
-            all_rows = sheet.get_all_values()
-            last_row = all_rows[-1]
-            real_row_number = len(all_rows) # ✅ 真實的行數
+                record = {
+                    "日期": last_row[0],
+                    "項目": last_row[1],
+                    "金額": last_row[2],
+                    "備註": last_row[3]
+                }
+                flex = create_flex_list([record], start_row=real_row_number)
 
-            record = {
-                "日期": last_row[0],
-                "項目": last_row[1],
-                "金額": last_row[2],
-                "備註": last_row[3]
-            }
-            flex = create_flex_list([record])
-
-            line_bot_api.reply_message(event.reply_token, [
-                TextSendMessage(text=msg),
-                FlexSendMessage(alt_text="新增記錄", contents=flex["contents"][0])
-            ])
-            user_state.pop(user_id)
-        except Exception:
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="❌ 格式錯誤，請重新輸入：項目 金額 備註，例如：\n早餐 80 QBurger")
-            )
-        return
-
-    # 使用者輸入「查詢」 → 顯示 quick reply 日期選擇
-    if text == "查詢":
-        today = now.strftime("%Y%m%d")
-        yesterday = (now - timedelta(days=1)).strftime("%Y%m%d")
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text="請選擇要查詢的日期",
-            quick_reply=QuickReply(items=[
-                QuickReplyButton(action=MessageAction(label="今天", text=f"查詢 {today}")),
-                QuickReplyButton(action=MessageAction(label="昨天", text=f"查詢 {yesterday}")),
-                QuickReplyButton(action=MessageAction(label="自訂日期", text="查詢 自訂"))
-            ])
-        ))
-        return
-
-    # ✅ 查詢 [日期] 的格式處理（如：查詢 20250510）
-    if text.startswith("查詢 "):
-        try:
-            target = text.split()[1]
-            if target == "自訂":
-                user_state[user_id] = {"step": "wait_custom_query_date"}
+                line_bot_api.reply_message(event.reply_token, [
+                    TextSendMessage(text=msg),
+                    FlexSendMessage(alt_text="新增記錄", contents=flex["contents"][0])
+                ])
+            except:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                    text="請輸入要查詢的日期（格式：20250510）"
+                    text="❌ 格式有誤，請輸入：新增 項目 金額 備註，例如：\n新增 早餐 80 QBurger"
                 ))
-                return
+            return
 
-            date_str = to_dash_date(target)
-            matched = filter_by_date(records, date_str)
-            if not matched:
-                raise ValueError(f"{date_str} 沒有紀錄")
-            start_row = 2 + records.index(matched[0])  # 從哪一列開始
-            flex = create_flex_list(matched, start_row=start_row)
-            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查詢結果", contents=flex))
-        except Exception as e:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
-        return
+        # ✅ 若只有輸入「新增」兩字 → 進入引導模式
+        if len(parts) == 1:
+            user_state[user_id] = {"step": "wait_detail"}
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                text="請輸入：項目 金額 備註，例如：\n早餐 80 QBurger"
+            ))
+            return
+
+        # 使用者輸入「查詢」 → 顯示 quick reply 日期選擇
+        if text == "查詢":
+            today = now.strftime("%Y%m%d")
+            yesterday = (now - timedelta(days=1)).strftime("%Y%m%d")
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                text="請選擇要查詢的日期",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="今天", text=f"查詢 {today}")),
+                    QuickReplyButton(action=MessageAction(label="昨天", text=f"查詢 {yesterday}")),
+                    QuickReplyButton(action=MessageAction(label="自訂日期", text="查詢 自訂"))
+                ])
+            ))
+            return
+
+        # ✅ 查詢 [日期] 的格式處理（如：查詢 20250510）
+        if text.startswith("查詢 "):
+            try:
+                target = text.split()[1]
+                if target == "自訂":
+                    user_state[user_id] = {"step": "wait_custom_query_date"}
+                    line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                        text="請輸入要查詢的日期（格式：20250510）"
+                    ))
+                    return
+
+                date_str = to_dash_date(target)
+                matched = filter_by_date(records, date_str)
+                if not matched:
+                    raise ValueError(f"{date_str} 沒有紀錄")
+                start_row = 2 + records.index(matched[0])  # 從哪一列開始
+                flex = create_flex_list(matched, start_row=start_row)
+                line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查詢結果", contents=flex))
+            except Exception as e:
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
+            return
     
     # ✅ 處理自訂日期的輸入
     if user_id in user_state and user_state[user_id].get("step") == "wait_custom_query_date":
