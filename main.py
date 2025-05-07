@@ -274,14 +274,17 @@ def handle_message(event):
             sheet.update_cell(row, 3, amount) # 金額 → 第 3 欄
             sheet.update_cell(row, 4, note)   # 備註 → 第 4 欄
 
-            # 查出更新後資料
-            row_data = sheet.row_values(row)
+            # ✅ 改成用 get_all_values() 安全取得行資料
+            all_rows = sheet.get_all_values()
+            row_data = all_rows[row - 1] if row - 1 < len(all_rows) else []
+
             record = {
-                "日期": row_data[0],
-                "項目": row_data[1],
-                "金額": row_data[2],
-                "備註": row_data[3]
+                "日期": row_data[0] if len(row_data) > 0 else "",
+                "項目": row_data[1] if len(row_data) > 1 else "",
+                "金額": row_data[2] if len(row_data) > 2 else "",
+                "備註": row_data[3] if len(row_data) > 3 else ""
             }
+
             flex = create_flex_list([record], start_row=row)
 
             line_bot_api.reply_message(event.reply_token, [
