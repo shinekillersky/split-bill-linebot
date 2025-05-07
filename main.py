@@ -249,14 +249,19 @@ def handle_message(event):
     if user_id in user_state and user_state[user_id].get("step") == "wait_modify_row":
         try:
             row = int(text.strip())
+            all_rows = sheet.get_all_values()
+
+            if row < 1 or row >= len(all_rows):
+                raise ValueError(f"❌ 第 {row} 筆不存在，請重新輸入")
+
             user_state[user_id]["row"] = row
             user_state[user_id]["step"] = "wait_modify_values"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(
                 text="請輸入修改後的資料（格式：項目 金額 [備註]）例如：午餐 130 麥當勞"
             ))
-        except:
+        except Exception as e:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text="❌ 請輸入有效的數字，例如：2"
+                text=f"❌ {e}"
             ))
         return
 
@@ -266,10 +271,7 @@ def handle_message(event):
             all_rows = sheet.get_all_values()
             row = user_state[user_id]["row"]  # 使用者輸入的是「第幾筆資料」（不含標題列）
             sheet_row = row + 1               # 所以實際在 Google Sheet 中是 row+1
-
-            if row < 1 or row > len(all_rows):
-                raise ValueError(f"❌ 第 {row} 筆不存在，請重新輸入")
-
+            
             parts = text.split(maxsplit=2)
             if len(parts) < 2:
                 raise ValueError("請輸入至少兩個欄位：項目 金額（備註可選）")
