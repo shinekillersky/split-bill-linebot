@@ -446,12 +446,16 @@ def handle_message(event):
     if text.startswith("統計月 "):
         try:
             month_str = text.split()[1]
-            if len(month_str) != 6:
-                raise ValueError("請輸入 6 碼年月（如 202505）")
-            prefix = f"{month_str[:4]}-{month_str[4:]}"
+            if len(month_str) != 6 or not month_str.isdigit():
+                raise ValueError("格式錯誤，請輸入 6 碼年月（如 202505）")
+
+            year, month = month_str[:4], month_str[4:]
+            prefix = f"{year}-{month.zfill(2)}"
             matched = [r for r in get_all_records() if r["日期"].startswith(prefix)]
+
             if not matched:
-                raise ValueError(f"{prefix} 沒有資料")
+                raise ValueError(f"{prefix} 查無資料")
+
             total = sum(int(r["金額"]) for r in matched)
             per_item = {}
             for r in matched:
@@ -459,10 +463,16 @@ def handle_message(event):
                 per_item[name] = per_item.get(name, 0) + int(r["金額"])
             detail = "\n".join([f"{k}: {v}" for k, v in per_item.items()])
             msg = f"📊 統計月份：{prefix}\n總金額：{total} 元\n\n明細：\n{detail}"
+
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
         except Exception as e:
+            # ⬇️ QuickReply 選單重新出現
+            today = now.strftime("%Y%m%d")
+            yesterday = (now - timedelta(days=1)).strftime("%Y%m%d")
+            this_month = now.strftime("%Y%m")
+            last_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y%m")
             line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text=f"❌ {e}\n請重新選擇要統計的範圍：",
+                text=f"❌ {e}\n請重新選擇要統計的月份：",
                 quick_reply=QuickReply(items=[
                     QuickReplyButton(action=MessageAction(label="今天", text=f"統計 {today}")),
                     QuickReplyButton(action=MessageAction(label="昨天", text=f"統計 {yesterday}")),
