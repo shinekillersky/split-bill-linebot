@@ -65,7 +65,7 @@ def get_main_menu():
         }            
     }
 
-# ✅ 讓 create_flex_list 支援指定 row 編號
+# 選單
 def create_flex_list(records, start_row=2):
     bubbles = []
     for idx, r in enumerate(records):
@@ -85,10 +85,7 @@ def create_flex_list(records, start_row=2):
             }
         }
         bubbles.append(b)
-    return {"type": "carousel", "contents": bubbles}
-
-    # ✅ 呼叫時帶入真實 row
-    flex = create_flex_list([record], start_row=real_row_number)
+    return {"type": "carousel", "contents": bubbles}    
 
 @app.post("/callback")
 async def callback(request: Request):
@@ -293,7 +290,7 @@ def handle_message(event):
             }
             flex = create_flex_list([record], start_row=row + 1)
             line_bot_api.reply_message(event.reply_token, [
-                TextSendMessage(text=f"✅ 第 {row} 筆已更新完成"),
+                TextSendMessage(text=f"✅ 第 {row} 筆已修改成功"),
                 FlexSendMessage(alt_text="更新後資料", contents=flex["contents"][0])
             ])
         except Exception as e:
@@ -345,7 +342,7 @@ def handle_message(event):
     if text.strip() == "統計 自訂":
         user_state[user_id] = {"step": "wait_custom_stat_date"}
         line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text="請輸入日期（格式：20240510）"
+            text="請輸入日期（格式：20250507）"
         ))
         return
 
