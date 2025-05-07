@@ -262,6 +262,7 @@ def handle_message(event):
     # 使用者輸入了項目 金額 [備註] → 執行修改
     if user_id in user_state and user_state[user_id].get("step") == "wait_modify_values":
         try:
+            all_rows = sheet.get_all_values()
             row = user_state[user_id]["row"]  # 使用者輸入的是「第幾筆資料」（不含標題列）
             sheet_row = row + 1               # 所以實際在 Google Sheet 中是 row+1
 
@@ -292,7 +293,7 @@ def handle_message(event):
             }
             flex = create_flex_list([record], start_row=row + 1)
             line_bot_api.reply_message(event.reply_token, [
-                TextSendMessage(text=f"✅ 第 {row} 筆資料已更新完成"),
+                TextSendMessage(text=f"✅ 第 {row} 筆已更新完成"),
                 FlexSendMessage(alt_text="更新後資料", contents=flex["contents"][0])
             ])
         except Exception as e:
