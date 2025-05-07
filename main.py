@@ -306,7 +306,7 @@ def handle_message(event):
         user_state.pop(user_id)
         return
 
-    # ➖ 引導式刪除第一步：輸入「刪除」
+    # ➖ 使用者輸入「刪除」
     if text == "刪除":
         user_state[user_id] = {"step": "wait_delete_row"}
         line_bot_api.reply_message(event.reply_token, TextSendMessage(
@@ -314,20 +314,52 @@ def handle_message(event):
         ))
         return
 
-    # ➖ 第二步：輸入要刪除的 row 編號
+    # ➖ 使用者輸入欲刪除的行數
     if user_id in user_state and user_state[user_id].get("step") == "wait_delete_row":
         try:
             row = int(text.strip())
-            sheet.delete_rows(row)
-            user_state.pop(user_id)
+            all_rows = sheet.get_all_values()
+            sheet_row = row + 1
+            if row < 1 or sheet_row > len(all_rows):
+                raise ValueError(f"❌ 第 {row} 筆資料不存在，請重新輸入有效的編號")
 
-            # 🔁 回覆刪除成功並跳出主選單
+            row_data = all_rows[sheet_row - 1]
+            while len(row_data) < 4:
+                row_data.append("")
+            record = {
+                "日期": row_data[0],
+                "項目": row_data[1],
+                "金額": row_data[2],
+                "備註": row_data[3]
+            }
+            flex = create_flex_list([record], start_row=row + 1)
+            user_state[user_id] = {"step": "confirm_delete", "row": row}
             line_bot_api.reply_message(event.reply_token, [
-                TextSendMessage(text=f"✅ 已成功刪除第 {row} 筆資料"),
-                FlexSendMessage(alt_text="選單", contents=get_main_menu())
+                FlexSendMessage(alt_text="確認刪除", contents=flex["contents"][0]),
+                TextSendMessage(
+                    text=f"⚠️ 確定要刪除第 {row} 筆資料嗎？",
+                    quick_reply=QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="✅ 確認刪除", text="刪除 確認")),
+                        QuickReplyButton(action=MessageAction(label="❌ 取消刪除", text="刪除 取消"))
+                    ])
+                )
             ])
-        except:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ 請輸入有效數字，例如：2"))
+        except Exception as e:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=str(e)))
+        return
+    
+    # ➖ 確認刪除
+    if text == "刪除 確認" and user_state.get(user_id, {}).get("step") == "confirm_delete":
+        row = user_state[user_id]["row"]
+        sheet.delete_rows(row + 1)
+        user_state.pop(user_id)
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ 已刪除第 {row} 筆資料"))
+        return
+    
+    # ➖ 取消刪除
+    if text == "刪除 取消" and user_state.get(user_id, {}).get("step") == "confirm_delete":
+        user_state.pop(user_id)
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❎ 已取消刪除"))
         return
     
     # ✅ 統計：第一階段 QuickReply 日期選擇
