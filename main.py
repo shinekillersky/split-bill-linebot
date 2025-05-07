@@ -110,10 +110,11 @@ def handle_message(event):
     # ✅ 新增功能：可直接記帳或引導輸入
     if text.startswith("新增"):
         parts = text.split(maxsplit=3)
-        
-        # ✅ 格式：新增 項目 金額 備註
-        if len(parts) == 4:
-            _, item, amount_str, note = parts
+
+        # ✅ 格式：新增 項目 金額 [備註]
+        if len(parts) >= 3:
+            _, item, amount_str = parts[:3]
+            note = parts[3] if len(parts) == 4 else ""
             try:
                 amount = int(amount_str)
                 date = record_expense(item, amount, note)
@@ -137,17 +138,17 @@ def handle_message(event):
                 ])
             except:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                    text="❌ 格式有誤，請輸入：新增 項目 金額 備註，例如：\n新增 早餐 80 QBurger"
+                    text="❌ 金額格式錯誤，請輸入：新增 項目 金額 [備註]，例如：\n新增 早餐 80 QBurger"
                 ))
             return
 
-        # ✅ 若只有輸入「新增」兩字 → 進入引導模式
-        if len(parts) == 1:
-            user_state[user_id] = {"step": "wait_detail"}
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text="請輸入：項目 金額 備註，例如：\n早餐 80 QBurger"
-            ))
-            return
+    # ✅ 若只有輸入「新增」兩字 → 進入引導模式
+    if len(parts) == 1:
+        user_state[user_id] = {"step": "wait_detail"}
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(
+            text="請輸入：項目 金額 [備註]，例如：\n早餐 80 QBurger"
+        ))
+        return
 
         # 使用者輸入「查詢」 → 顯示 quick reply 日期選擇
         if text == "查詢":
