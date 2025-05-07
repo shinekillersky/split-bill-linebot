@@ -107,7 +107,7 @@ def handle_message(event):
     now = datetime.now(pytz.timezone("Asia/Taipei"))
     records = get_all_records()
 
-    # ✅ 新增功能：可直接記帳或引導輸入
+    # ✅ 新增功能：可直接記帳或進入引導輸入模式
     if text.startswith("新增"):
         parts = text.split(maxsplit=3)
 
@@ -142,49 +142,84 @@ def handle_message(event):
                 ))
             return
 
-    # ✅ 若只有輸入「新增」兩字 → 進入引導模式
-    if len(parts) == 1:
-        user_state[user_id] = {"step": "wait_detail"}
+        # ✅ 若只有輸入「新增」兩字 → 進入引導模式
+        if len(parts) == 1:
+            user_state[user_id] = {"step": "wait_detail"}
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                text="請輸入：項目 金額 [備註]，例如：\n早餐 80 QBurger"
+            ))
+            return
+        
+    if user_id in user_state and user_state[user_id].get("step") == "wait_detail":
+        try:
+            parts = text.split(maxsplit=2)
+            if len(parts) < 2:
+                raise ValueError("請至少輸入：項目 金額，例如：\n早餐 80")
+            item = parts[0]
+            amount = int(parts[1])
+            note = parts[2] if len(parts) == 3 else ""
+            date = record_expense(item, amount, note)
+
+            msg = f"✅ 記帳成功"
+            all_rows = sheet.get_all_values()
+            last_row = all_rows[-1]
+            real_row_number = len(all_rows)
+
+            record = {
+                "日期": last_row[0],
+                "項目": last_row[1],
+                "金額": last_row[2],
+                "備註": last_row[3]
+            }
+            flex = create_flex_list([record], start_row=real_row_number)
+
+            line_bot_api.reply_message(event.reply_token, [
+                TextSendMessage(text=msg),
+                FlexSendMessage(alt_text="新增記錄", contents=flex["contents"][0])
+            ])
+            user_state.pop(user_id)
+        except Exception as e:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="❌ 格式錯誤，請重新輸入：項目 金額 [備註]，例如：\n早餐 80 QBurger")
+            )
+        return
+
+    # 使用者輸入「查詢」 → 顯示 quick reply 日期選擇
+    if text == "查詢":
+        today = now.strftime("%Y%m%d")
+        yesterday = (now - timedelta(days=1)).strftime("%Y%m%d")
         line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            text="請輸入：項目 金額 [備註]，例如：\n早餐 80 QBurger"
+            text="請選擇要查詢的日期",
+            quick_reply=QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="今天", text=f"查詢 {today}")),
+                QuickReplyButton(action=MessageAction(label="昨天", text=f"查詢 {yesterday}")),
+                QuickReplyButton(action=MessageAction(label="自訂日期", text="查詢 自訂"))
+            ])
         ))
         return
 
-        # 使用者輸入「查詢」 → 顯示 quick reply 日期選擇
-        if text == "查詢":
-            today = now.strftime("%Y%m%d")
-            yesterday = (now - timedelta(days=1)).strftime("%Y%m%d")
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text="請選擇要查詢的日期",
-                quick_reply=QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="今天", text=f"查詢 {today}")),
-                    QuickReplyButton(action=MessageAction(label="昨天", text=f"查詢 {yesterday}")),
-                    QuickReplyButton(action=MessageAction(label="自訂日期", text="查詢 自訂"))
-                ])
-            ))
-            return
+    # ✅ 查詢 [日期] 的格式處理（如：查詢 20250510）
+    if text.startswith("查詢 "):
+        try:
+            target = text.split()[1]
+            if target == "自訂":
+                user_state[user_id] = {"step": "wait_custom_query_date"}
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                    text="請輸入要查詢的日期（格式：20250510）"
+                ))
+                return
 
-        # ✅ 查詢 [日期] 的格式處理（如：查詢 20250510）
-        if text.startswith("查詢 "):
-            try:
-                target = text.split()[1]
-                if target == "自訂":
-                    user_state[user_id] = {"step": "wait_custom_query_date"}
-                    line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                        text="請輸入要查詢的日期（格式：20250510）"
-                    ))
-                    return
-
-                date_str = to_dash_date(target)
-                matched = filter_by_date(records, date_str)
-                if not matched:
-                    raise ValueError(f"{date_str} 沒有紀錄")
-                start_row = 2 + records.index(matched[0])  # 從哪一列開始
-                flex = create_flex_list(matched, start_row=start_row)
-                line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查詢結果", contents=flex))
-            except Exception as e:
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
-            return
+            date_str = to_dash_date(target)
+            matched = filter_by_date(records, date_str)
+            if not matched:
+                raise ValueError(f"{date_str} 沒有紀錄")
+            start_row = 2 + records.index(matched[0])  # 從哪一列開始
+            flex = create_flex_list(matched, start_row=start_row)
+            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查詢結果", contents=flex))
+        except Exception as e:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
+        return
     
     # ✅ 處理自訂日期的輸入
     if user_id in user_state and user_state[user_id].get("step") == "wait_custom_query_date":
