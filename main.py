@@ -421,18 +421,34 @@ def handle_message(event):
             matched = filter_by_date(get_all_records(), date_str)
             if not matched:
                 raise ValueError(f"{date_str} 沒有資料")
-
+            
             total = sum(int(r["金額"]) for r in matched)
             per_item = {}
             for r in matched:
                 name = r["項目"]
                 per_item[name] = per_item.get(name, 0) + int(r["金額"])
+
             detail = "\n".join([f"{k}: {v}" for k, v in per_item.items()])
             msg = f"📊 統計日期：{date_str}\n總金額：{total} 元\n\n明細：\n{detail}"
 
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
+
         except Exception as e:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
+            today = now.strftime("%Y%m%d")
+            yesterday = (now - timedelta(days=1)).strftime("%Y%m%d")
+            this_month = now.strftime("%Y%m")
+            last_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y%m")
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                text=f"❌ {e}\n請重新選擇要統計的日期",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="今天", text=f"統計 {today}")),
+                    QuickReplyButton(action=MessageAction(label="昨天", text=f"統計 {yesterday}")),
+                    QuickReplyButton(action=MessageAction(label="本月", text=f"統計月 {this_month}")),
+                    QuickReplyButton(action=MessageAction(label="上個月", text=f"統計月 {last_month}")),
+                    QuickReplyButton(action=MessageAction(label="自訂日期", text="統計 自訂")),
+                    QuickReplyButton(action=MessageAction(label="自訂年月", text="統計月 自訂"))
+                ])
+            ))
         return
     
     # ✅ 統計月：快速查詢（本月 / 上月）
