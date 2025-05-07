@@ -263,26 +263,31 @@ def handle_message(event):
     if user_id in user_state and user_state[user_id].get("step") == "wait_modify_values":
         try:
             row = user_state[user_id]["row"]
+            all_rows = sheet.get_all_values()
+            if row < 2 or row > len(all_rows):
+                raise ValueError(f"❌ 第 {row} 行不存在，請重新輸入有效行數。")
+
             parts = text.split(maxsplit=2)
             if len(parts) < 2:
                 raise ValueError("請輸入至少兩個欄位：項目 金額（備註可選）")
+
             item = parts[0]
             amount = int(parts[1])
             note = parts[2] if len(parts) == 3 else ""
 
-            sheet.update_cell(row, 2, item)   # 項目 → 第 2 欄
-            sheet.update_cell(row, 3, amount) # 金額 → 第 3 欄
-            sheet.update_cell(row, 4, note)   # 備註 → 第 4 欄
+            sheet.update_cell(row, 2, item)
+            sheet.update_cell(row, 3, amount)
+            sheet.update_cell(row, 4, note)
 
-            # ✅ 改成用 get_all_values() 安全取得行資料
-            all_rows = sheet.get_all_values()
-            row_data = all_rows[row - 1] if row - 1 < len(all_rows) else []
+            row_data = sheet.row_values(row)
+            while len(row_data) < 4:
+                row_data.append("")
 
             record = {
-                "日期": row_data[0] if len(row_data) > 0 else "",
-                "項目": row_data[1] if len(row_data) > 1 else "",
-                "金額": row_data[2] if len(row_data) > 2 else "",
-                "備註": row_data[3] if len(row_data) > 3 else ""
+                "日期": row_data[0],
+                "項目": row_data[1],
+                "金額": row_data[2],
+                "備註": row_data[3]
             }
 
             flex = create_flex_list([record], start_row=row)
