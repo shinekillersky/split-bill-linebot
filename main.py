@@ -137,7 +137,7 @@ def handle_message(event):
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(
                     text="❌ 金額格式錯誤，請輸入：新增 項目 金額 [備註]，例如：\n新增 早餐 80 QBurger"
                 ))
-            return
+                return
 
         # ✅ 若只有輸入「新增」兩字 → 進入引導模式
         if len(parts) == 1:
@@ -180,7 +180,7 @@ def handle_message(event):
                 event.reply_token,
                 TextSendMessage(text="❌ 格式錯誤，請重新輸入：項目 金額 [備註]，例如：\n早餐 80 QBurger")
             )
-        return
+            return
 
     # 使用者輸入「查詢」 → 顯示 quick reply 日期選擇
     if text == "查詢":
@@ -232,6 +232,8 @@ def handle_message(event):
             user_state.pop(user_id)  # 成功查到才移除狀態
         except Exception as e:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
+            return
+        
         user_state.pop(user_id)
         return
     
