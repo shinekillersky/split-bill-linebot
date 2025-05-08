@@ -233,8 +233,6 @@ def handle_message(event):
         except Exception as e:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
             return
-        
-        user_state.pop(user_id)
         return
     
     # 使用者輸入「修改」→ 進入引導模式
