@@ -214,6 +214,7 @@ def handle_message(event):
             start_row = 2 + records.index(matched[0])  # 從哪一列開始
             flex = create_flex_list(matched, start_row=start_row)
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="查詢結果", contents=flex))
+            user_state.pop(user_id)  # 成功查到才移除狀態
         except Exception as e:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {e}"))
         return
